@@ -1,0 +1,13 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: iam-standby
+spec:
+  teamId: "iam"
+  volume:
+    size: 5Gi
+  numberOfInstances: 1
+  postgresql:
+    version: "13"
+  standby:
+    s3_wal_path: "s3://s3_wal/spilo/iam-main/e76f5c2c-8034-4109-b552-4b184c3dbbc2/wal/12"

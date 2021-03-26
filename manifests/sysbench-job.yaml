@@ -1,0 +1,41 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sysbench-prepare
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      name: sysbench-prepare
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: sysbench-prepare
+        image: olarsson2/sysbench
+        command:
+        - sysbench
+        - --db-driver=pgsql
+        - --table-size=10000
+        - --tables=12
+        - --threads=2
+        - --pgsql-host=iam-main.default.svc.cluster.local
+        - --pgsql-port=5432
+        - --pgsql-user=$(SBTEST_USER)
+        - --pgsql-password=$(SBTEST_PASS)
+        - /usr/share/sysbench/oltp_common.lua
+        - prepare
+        env:
+        - name: "SBTEST_USER"
+          valueFrom:
+            secretKeyRef:
+              name: sbtest-owner-user.iam-main.credentials.postgresql.acid.zalan.do
+              key: username
+        - name: "SBTEST_PASS"
+          valueFrom:
+            secretKeyRef:
+              name: sbtest-owner-user.iam-main.credentials.postgresql.acid.zalan.do
+              key: password
+        securityContext:
+          runAsUser: 2000
+          allowPrivilegeEscalation: false
+          privileged: false

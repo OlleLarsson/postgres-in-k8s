@@ -1,0 +1,41 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    app: sysbench
+  name: sysbench-r
+spec:
+  restartPolicy: OnFailure
+  containers:
+  - name: sysbench
+    image: olarsson2/sysbench
+    command:
+    - sysbench
+    - --time=0
+    - --rate=100
+    - --report-interval=10
+    - --db-driver=pgsql
+    - --table-size=10000
+    - --tables=12
+    - --threads=2
+    - --pgsql-host=iam-main-repl.default.svc.cluster.local
+    - --pgsql-port=5432
+    - --pgsql-user=$(SBTEST_USER)
+    - --pgsql-password=$(SBTEST_PASS)
+    - /usr/share/sysbench/oltp_read_only.lua
+    - run
+    env:
+    - name: "SBTEST_USER"
+      valueFrom:
+        secretKeyRef:
+          name: sbtest-owner-user.iam-main.credentials.postgresql.acid.zalan.do
+          key: username
+    - name: "SBTEST_PASS"
+      valueFrom:
+        secretKeyRef:
+          name: sbtest-owner-user.iam-main.credentials.postgresql.acid.zalan.do
+          key: password
+    securityContext:
+      runAsUser: 2000
+      allowPrivilegeEscalation: false
+      privileged: false

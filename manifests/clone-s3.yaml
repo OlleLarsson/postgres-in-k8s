@@ -1,0 +1,15 @@
+apiVersion: "acid.zalan.do/v1"
+kind: postgresql
+metadata:
+  name: iam-s3-clone
+spec:
+  teamId: "iam"
+  volume:
+    size: 5Gi
+  numberOfInstances: 2
+  postgresql:
+    version: "13"
+  clone:
+    uid: "e76f5c2c-8034-4109-b552-4b184c3dbbc2"
+    cluster: "iam-main"
+    timestamp: "2021-03-29T16:44:00+01:00"
