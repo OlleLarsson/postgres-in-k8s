@@ -18,6 +18,8 @@ spec:
     version: "12"
     parameters:
       password_encryption: "scram-sha-256"
+      log_destination: "stderr"
+      logging_collector: "off"
   patroni:
     pg_hba:
     # TYPE      DATABASE    USER      ADDRESS      METHOD
