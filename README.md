@@ -2,22 +2,23 @@
 POC using Zalando's [PostgreSQL K8s Operator](https://github.com/zalando/postgres-operator).
 
 
-### Requirements
+## Requirements
 
 - A running Kubernetes Cluster.
     - Priviledged podSecurityPolicy installed.
 - Helm v3.
 - Access to an S3 service.
+- Yq version 4.x, named `yq_4`.
 
 
-### Get Zalando's postgres-operator repo
+#### Get Zalando's postgres-operator repo
 
 ```shellSession
 git clone git@github.com:zalando/postgres-operator.git
 git checkout c9acd527
 ```
 
-### Configure nessecary variables
+#### Configure nessecary variables
 
 ```shellSession
 export aws_region=""            # S3 service region
@@ -30,7 +31,7 @@ export wal_s3_bucket=""         # S3 bucket to store wal and backups
 export aws_s3_force_path_style="true"
 ```
 
-### Install wal-g environment secret
+#### Install wal-g environment secret
 
 ```shellSession
 mkdir ignore && cp manifests/walg-environment-secret.yaml ignore/walg-environment-secret.yaml
@@ -44,7 +45,7 @@ yq_4 e '(.stringData.AWS_SECRET_ACCESS_KEY, .stringData.CLONE_AWS_SECRET_ACCESS_
 kubectl apply -f ignore/walg-environment-secret.yaml
 ```
 
-### Install operator
+#### Install operator
 
 We'll be using the [CRD-based configuration](https://github.com/zalando/postgres-operator/blob/master/docs/reference/operator_parameters.md#configuration-parameters).
 
@@ -73,7 +74,7 @@ kubectl logs "$(kubectl get pod -l app.kubernetes.io/name=postgres-operator --ou
 ```
 
 
-### Install postgres
+#### Install postgres
 
 ```shellSession
 kubectl apply -f manifests/main.yaml
@@ -95,7 +96,7 @@ kubectl logs "$(kubectl get pod -l app.kubernetes.io/name=postgres-operator --ou
 ```
 
 
-### Add dummy data and workload
+#### Add dummy data and workload
 We'll be using sysbench to generate some data and load against the servers.
 
 
@@ -120,7 +121,7 @@ kubectl logs -l app=sysbench -f
 ```
 
 
-### Clone from S3 with major version upgrade
+#### Clone from S3 with major version upgrade
 
 Check current version that the main cluster is running.
 ```shellSession
@@ -154,7 +155,7 @@ kubectl exec -it $(kubectl get pods -l spilo-role=master,cluster-name=iam-s3-clo
 ```
 
 
-### In-place major version upgrade
+#### In-place major version upgrade
 
 Check current version.
 ```shellSession
@@ -177,7 +178,7 @@ kubectl exec -it $(kubectl get pods -l spilo-role=master --output='name') -c pos
 ```
 
 
-### Standby cluster
+#### Standby cluster
 
 ```shellSession
 cp manifests/standby.yaml ignore/
@@ -191,7 +192,7 @@ kubectl logs iam-standby1-0 -f -c postgres
 ```
 
 
-### Cleanup
+#### Cleanup
 
 ```shellSession
 kubectl delete postgresql --all
@@ -202,21 +203,67 @@ kubectl delete pod -l app=sysbench
 
 ## Notes
 
-### Encryption
+#### Encryption
 
-The operator/spilo does not support easy configuration of pgp encryption.
+The operator/spilo does not support (easy) configuration of pgp encryption.
 I think I managed to hack it together somewhat for a new cluster, but it breaks bootstrapping from cloning so it's not usable.
 The main problem is that it not possible to configre wal-g environemtn with arbitrary wal-g environment variables.
 
-### Exposing psql
+#### Exposing psql
 
 I don't know how one would expose the postgresql pods.
 There's this note about it in the [NGINX Ingress Controller docs](https://kubernetes.github.io/ingress-nginx/user-guide/exposing-tcp-udp-services/).
-I have not tried that though.
 
-### Logical backup
+#### Logical backup
 
 I haven't tried it yet.
+Still the same problem as before that you specify AWS credentials directly in [helm values](https://github.com/zalando/postgres-operator/blob/master/docs/reference/operator_parameters.md#logical-backup) instead of through secrets.
+https://github.com/zalando/postgres-operator/issues/1247
 
+There is no way of boostrapping a new postgresql cluster from a logical backup.
+This is a procedure that one would have to figure out and document.
 
-### 
+#### Logs
+
+It would take some work to get some decent logs to Elasticsearch from the pods.
+The [ingest pipeline](https://github.com/elastic/beats/blob/master/filebeat/module/postgresql/log/ingest/pipeline.yml) is really only meant for postgresql logs.
+
+```shellSession
+# wal-g
+INFO: 2021/04/12 05:35:36.946207 FILE PATH: 0000000200000036000000AB.br
+
+# pgq_ticker
+2021-04-12 05:35:35,140 INFO: Lock owner: iam-main-0; I am iam-main-0
+2021-04-12 05:35:35,213 INFO: no action.  i am the leader with the lock
+
+# postgresql
+2021-04-12 05:33:36 UTC [614]: [5198-1] 607024a0.266 116812188 sbtest sbtest_owner_user [unknown] 10.233.77.179 ERROR:  duplicate key value violates unique constraint "sbtest8_pkey"
+2021-04-12 05:33:36 UTC [614]: [5199-1] 607024a0.266 116812188 sbtest sbtest_owner_user [unknown] 10.233.77.179 DETAIL:  Key (id)=(4987) already exists.
+```
+
+#### Storage
+
+A consideration that one has to make before running in PostgreSQL in Kubernetes (and in the cloud for that matter), is to determine what requirements the clusters will need on the underlying storage.
+- Is block storage integration configured in the Kubernetes cluster?
+    - If, so what performance does each available storageclass give you?
+
+If you come to the conclusion that block storage does not give you, let's say, sufficient read/write latency, you might have to consider using local pv's in Kubernetes which forces the pods to be running on specific Kubernetes nodes, thus eliminating some of the freedom that Kubernetes originally offers and safety that block storage gives you.
+
+#### The operator is a piece of code
+... that naturally contains and can introduce bugs that might be quite detremental to your clusters.
+The maintainers seems to be address bugs in a quick manner and release patch version if the bug is effecting enough people.
+One such recent bug is the one fixed by [this pr](https://github.com/zalando/postgres-operator/pull/1380).
+
+## Related reading
+
+#### Patroni
+
+- https://patroni.readthedocs.io/en/latest/index.html
+
+#### Spilo
+
+- https://github.com/zalando/spilo
+- https://github.com/zalando/spilo/tree/master/postgres-appliance/scripts
+
+#### Postgres operator
+- https://postgres-operator.readthedocs.io/en/latest/
